@@ -10,7 +10,7 @@ CLIENT_SOURCES = client.cc
 CLIENTOBJ = $(addsuffix .o, $(basename $(CLIENT_SOURCES))) 
 SERVEROBJ = $(addsuffix .o, $(basename $(SERVER_SOURCES))) 
 
-CXX_FLAG = -g -Wall -std=c++17 -pthread -lprotobuf -O3
+CXX_FLAG = -g -Wall -std=c++11 -pthread -lprotobuf -O3
 CC = g++
 
 .PHONY:all
