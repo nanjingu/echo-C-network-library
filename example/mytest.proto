@@ -4,13 +4,12 @@ package example;
 option cc_generic_services = true;
 
 message myRequest {
-      required int32 num1 = 1;
-      required int32 num2 = 2;
-      required string opt = 3;
+      required string url = 1;
 };
 
 message myResponse {
       required int32 ans = 1;
+      required string file = 2;
 };
 
 service myService {
