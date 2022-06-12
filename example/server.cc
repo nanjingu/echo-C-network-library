@@ -1,5 +1,6 @@
 #include <map>
-
+#include <fcntl.h>
+#include <unistd.h>
 #include "../echo/Logger.h"
 #include "../echo/EventLoop.h"
 #include "../echo/TcpConnection.h"
@@ -58,9 +59,6 @@ public:
 
     void onMessage(const TcpConnectionPtr& conn, Buffer& buffer)
     {
-        TRACE("connection %s recv %lu bytes",
-             conn->name().c_str(),
-             buffer.readableBytes());
 
         // send will retrieve the buffer
         if(username.empty()){ 
@@ -72,34 +70,54 @@ public:
             while(i < m)p += line[i++];
             username = n; 
             passwd = p;
-            std::cout<<"username: "<<username<<" passwd: "<<passwd<<std::endl;
             skiplist.insert_element(username, passwd);
             skiplist.upload_data();
-            line = "input your data";
+            line = "log in success, input file_name dest_name\n";
             conn->send(line);
             return;
         }
         example::myRequest request;
         std::string line = buffer.retrieveAllAsString();
         if (!request.ParseFromString(line)) { 
-            std::cout << "Failed to read msg." << std::endl; 
+            INFO("Failed to read msg."); 
             return; 
         }
-        char opt = request.opt()[0];
-        ::google::protobuf::int32 ans = 0, num1 = request.num1(), num2 = request.num2();
-        switch(opt){
-            case '+' : ans = num1 + num2;break;
-            case '-' : ans = num1 - num2;break;
-            case '*' : ans = num1 * num2;break;
-            case '/' : ans = num1 / num2;break;
+        std::string url = request.url();
+
+        int filefd = open(url.c_str(), O_RDONLY);
+        if(filefd < 0){
+            INFO("open %s failed\n", url);
+            std::string res = "url don't exist";
+            int ans = 404;
+            example::myResponse response;
+            response.set_ans(ans);
+            response.set_file(res);
+            if (!response.SerializeToString(&line)) { 
+                INFO("Failed to read msg.");
+                return; 
+            }
+            conn->send(line);
+            return;
         }
+
+        char filebuff[1024];
+        memset(filebuff, 0, 1024);
+        std::string file = "";
+        int num;
+        while((num = read(filefd, filebuff, sizeof(filebuff))) > 0){
+            file += filebuff;
+            memset(filebuff, 0, 1024);
+        }
+
+        ::google::protobuf::int32 ans = 200;
         example::myResponse response;
         response.set_ans(ans);
+        response.set_file(file);
         if (!response.SerializeToString(&line)) { 
             INFO("Failed to read msg.");
             return; 
         }
-        INFO("receive %d %c %d, send %d", num1, opt, num2, ans);
+        printf("file %s download done.\n", url.c_str());
         conn->send(line);
         expireAfter(conn, timeout_);
     }
