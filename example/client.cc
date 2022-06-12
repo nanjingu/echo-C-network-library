@@ -1,6 +1,7 @@
 #include <iostream>
 #include <thread>
-
+#include <fcntl.h>
+#include <unistd.h>
 #include "../echo/Logger.h"
 #include "../echo/TcpConnection.h"
 #include "../echo/TcpClient.h"
@@ -25,42 +26,61 @@ public:
     {
         if(!logIn){
             std::string line = buffer.retrieveAllAsString();
-            std::cout<<line<<std::endl;
+            printf("%s\n", line.c_str());
             logIn = true;
+            flag = true;
             return;
         }
         example::myResponse response;
         std::string line = buffer.retrieveAllAsString();
         if (!response.ParseFromString(line)) { 
-            std::cout << "Failed to read msg." << std::endl; 
+            INFO("Failed to read msg."); 
             return; 
         }
-        std::cout << response.ans() << std::endl;
-        std::cout << buffer.retrieveAllAsString() << std::endl;
+        int resCode = response.ans();
+        std::string res = response.file();
+        if(resCode != 200){
+            INFO("download fail.code is %d and result is %s", resCode, res);
+            return;
+        }
+        else{
+            printf("download file...\n");
+            int filefd = open(saveName.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            if(filefd < 0){
+                INFO("create %s error\n");
+            }
+
+            else{
+                write(filefd, res.c_str(), sizeof(res));
+                printf("download done and save as %s\nnow you can download other file.\n", saveName.c_str());
+            }
+        }
+        flag = true;
     }
 
     void run()
     {
-        std::cout<< "input username and passwd first:"<<std::endl;
+        printf("input username and passwd: \n");
         std::string username, passwd, data = "";
         std::cin>>username>>passwd;
         data += username += ' '; data += passwd;
         conn_->send(data);
 
         example::myRequest request;
-        std::string line, opt;
-        int num1 = 0, num2 = 0;
+        std::string line, url;
+        // while(flag == false);
+        // flag = false;
         while (1) {
-            std::cin >> num1 >> opt >> num2;
-            request.set_opt(opt.c_str());
-            request.set_num1(num1);
-            request.set_num2(num2);
+            std::cin >> url >> saveName;
+            request.set_url(url.c_str());
 
             if (!request.SerializeToString(&line)) { 
-                std::cout << "Failed to write msg." << std::endl; 
+                INFO("Failed to write msg."); 
                 return; 
             }
             conn_->send(line);
+            while(flag == false);
+            flag = false;
         }
         conn_->shutdown();
     }
@@ -68,7 +88,11 @@ public:
 private:
     TcpConnectionPtr conn_;
     bool logIn;
+    static std::string saveName;
+    static bool flag;
 };
+std::string UserInput::saveName = "";
+bool UserInput::flag = false;
 
 class EchoBench: noncopyable
 {
